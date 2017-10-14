@@ -1,0 +1,203 @@
+! vmx8
+! use "load merge terminal" and paste 
+! or upload the file and "load merge <file>"
+version 15.1F4.15;
+groups {
+    global {
+        system {
+            login {
+                user ntc {
+                    uid 2000;
+                    class super-user;
+                    authentication {
+                        encrypted-password "$5$9dE0bRr9$.VvWkJKa3J7HW95.G3KxW9x01nUoVi0PnXuZBlpOUH9"; ## SECRET-DATA
+                    }
+                }
+                user admin {
+                    uid 2001;
+                    class super-user;
+                    authentication {
+                        encrypted-password "$5$mbQOstdV$AdPDGytjPOiqHKy1boHgSsV1zJql1b6T.iFFJE85ZHD"; ## SECRET-DATA
+                    }
+                }                
+            }
+        }
+    }
+}
+apply-groups global;
+system {
+    host-name vmx8;
+    domain-name ntc.com;
+    root-authentication {
+        encrypted-password "$5$1FR588oW$dWnmaj9S4t/GHEYL/gn8tOz3.yXoIMYHrCDyn.4hIo0"; ## SECRET-DATA
+    }
+    services {
+        ssh;
+        netconf {
+            ssh;
+        }
+    }
+    syslog {
+        user * {
+            any emergency;
+        }
+        file messages {
+            any notice;
+            authorization info;
+        }
+        file interactive-commands {
+            interactive-commands any;
+        }
+    }
+}
+interfaces {
+    ge-0/0/0 {
+        description "To AS101";
+        unit 0 {
+            family inet {
+                address 10.101.0.1/31;
+            }
+        }
+    }
+    ge-0/0/1 {
+        description eos-spine1:Eth3;
+        unit 0 {
+            family inet {
+                address 10.6.1.0/31;
+            }
+            family iso;
+        }
+    }
+    ge-0/0/2 {
+        description eos-spine2:Eth3;
+        unit 0 {
+            family inet {
+                address 10.6.1.2/31;
+            }
+            family iso;
+        }
+    }
+    lo0 {
+        unit 0 {
+            family inet {
+                address 10.6.0.1/31;
+            }
+        }
+    }
+}
+snmp {
+    community public {
+        authorization read-only;
+    }
+    community networktocode {
+        authorization read-only;
+    }
+}
+routing-options {
+    static {
+        route 0.0.0.0/0 {
+            discard;
+            no-install;
+        }
+    }
+    aggregate {
+        defaults {
+            as-path {
+                origin igp;
+            }
+        }
+        route 10.6.0.0/16;
+    }
+    autonomous-system 6;
+}
+protocols {
+    bgp {
+        path-selection {
+            always-compare-med;
+            external-router-id;
+        }
+        advertise-inactive;
+        mtu-discovery;
+        log-updown;
+        family inet {
+            unicast {
+                prefix-limit {
+                    maximum 100000;
+                    teardown 89 idle-timeout forever;
+                }
+            }
+        }
+        group TRANSIT {
+            type external;
+            import TRANSIT-IN;
+            family inet {
+                unicast {
+                    prefix-limit {
+                        maximum 10000;
+                        teardown 80 idle-timeout 240;
+                    }
+                }
+            }
+            export TRANSIT-OUT;
+            neighbor 10.101.0.0 {
+                description Transit;
+                peer-as 101;
+            }
+        }
+    }
+    ospf {
+        export ospf-default;
+        area 0.0.0.0 {
+            interface ge-0/0/1.0 {
+                interface-type p2p;
+            }
+            interface ge-0/0/2.0 {
+                interface-type p2p;
+            }
+            interface ge-0/0/0.0 {
+                passive;
+            }
+            interface lo0.0 {
+                passive;
+            }
+        }
+    }
+    lldp {
+        port-id-subtype interface-name;
+        interface all;
+    }
+}
+policy-options {
+    policy-statement AGGREGATE {
+        from {
+            protocol direct;
+            route-filter 10.6.0.0/16 orlonger;
+        }
+        then accept;
+    }
+    policy-statement TRANSIT-IN {
+        term DROP_OURS {
+            from {
+                route-filter 10.6.0.0/16 orlonger;
+            }
+            then reject;
+        }
+        term ACCEPT {
+            then accept;
+        }
+    }
+    policy-statement TRANSIT-OUT {
+        from {
+            protocol aggregate;
+            route-filter 10.6.0.0/16 exact;
+        }
+        then accept;
+    }
+    policy-statement ospf-default {
+        from {
+            protocol static;
+            route-filter 0.0.0.0/0 exact;
+        }
+        then accept;
+    }
+}

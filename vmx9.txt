@@ -1,0 +1,153 @@
+! vmx9
+! use "load merge terminal" and paste 
+! or upload the file and "load merge <file>"
+groups {
+    global {
+        system {
+            login {
+                user ntc {
+                    uid 2000;
+                    class super-user;
+                    authentication {
+                        encrypted-password "$5$9dE0bRr9$.VvWkJKa3J7HW95.G3KxW9x01nUoVi0PnXuZBlpOUH9"; ## SECRET-DATA
+                    }
+                }
+                user admin {
+                    uid 2001;
+                    class super-user;
+                    authentication {
+                        encrypted-password "$5$mbQOstdV$AdPDGytjPOiqHKy1boHgSsV1zJql1b6T.iFFJE85ZHD"; ## SECRET-DATA
+                    }
+                }
+            }
+        }
+    }
+}
+interfaces {
+    ge-0/0/1 {
+        description "To AS101";
+        unit 0 {
+            family inet {
+                address 10.101.0.3/31;
+            }
+        }
+    }
+    ge-0/0/3 {
+        description eos-spine3:Eth4;
+        unit 0 {
+            family inet {
+                address 10.7.1.0/31;
+            }
+        }
+    }
+    ge-0/0/4 {
+        description eos-spine4:Eth4;
+        unit 0 {
+            family inet {
+                address 10.7.1.2/31;
+            }
+        }
+    }
+    lo0 {
+        unit 0 {
+            family inet {
+                address 10.7.0.1/31;
+            }
+        }
+    }
+}
+routing-options {
+    static {
+        route 0.0.0.0/0 {
+            discard;
+            no-install;
+        }
+    }
+    aggregate {
+        defaults {
+            as-path {
+                origin igp;
+            }
+        }
+        route 10.7.0.0/16;
+    }
+    autonomous-system 7;
+}
+protocols {
+    bgp {
+        path-selection {
+            always-compare-med;
+            external-router-id;
+        }
+        advertise-inactive;
+        mtu-discovery;
+        log-updown;
+        family inet {
+            unicast {
+                prefix-limit {
+                    maximum 100000;
+                    teardown 89 idle-timeout forever;
+                }
+            }
+        }
+        group TRANSIT {
+            type external;
+            import TRANSIT-IN;
+            family inet {
+                unicast {
+                    prefix-limit {
+                        maximum 10000;
+                        teardown 80 idle-timeout 240;
+                    }
+                }
+            }
+            export TRANSIT-OUT;
+            neighbor 10.101.0.2 {
+                description Transit;
+                peer-as 101;
+            }
+        }
+    }
+    ospf {
+        export ospf-default;
+        area 0.0.0.0 {
+            interface ge-0/0/3.0 {
+                interface-type p2p;
+            }
+            interface ge-0/0/4.0 {
+                interface-type p2p;
+            }
+            interface ge-0/0/1.0 {
+                passive;
+            }
+            interface lo0.0 {
+                passive;
+            }
+        }
+}
+policy-options {
+    policy-statement AGGREGATE {
+        from {
+            protocol direct;
+            route-filter 10.7.0.0/16 orlonger;
+        }
+        then accept;
+    }
+    policy-statement TRANSIT-IN {
+        then accept;
+    }
+    policy-statement TRANSIT-OUT {
+        from {
+            protocol aggregate;
+            route-filter 10.7.0.0/16 exact;
+        }
+        then accept;
+    }
+    policy-statement ospf-default {
+        from {
+            protocol static;
+            route-filter 0.0.0.0/0 exact;
+        }
+        then accept;
+    }
+}

@@ -1,0 +1,33 @@
+! eos-spine1
+username admin privilege 15 role network-admin secret 5 $1$KdtTgEru$GHPaKJ6cKyfXFy0J6sSrt.
+username ntc privilege 15 secret 5 $1$KergS3bl$RFVho/GXf.3bQHhOCbeky1
+!
+interface Ethernet1
+   description eos-leaf1:eth1
+   no switchport
+   ip address 10.6.1.4/31
+   ip ospf network point-to-point
+!
+interface Ethernet2
+   description eos-leaf2:eth1
+   no switchport
+   ip address 10.6.1.6/31
+   ip ospf network point-to-point
+!
+interface Ethernet3
+   description vmx8:ge-0/0/1
+   no switchport
+   ip address 10.6.1.1/31
+   ip ospf network point-to-point
+!
+interface Ethernet4
+   shutdown
+   no switchport
+!
+interface Loopback0
+   ip address 10.6.0.2/32
+!
+router ospf 1
+   network 0.0.0.0/0 area 0.0.0.0
+   max-lsa 12000
+!
